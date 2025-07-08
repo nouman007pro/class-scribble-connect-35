@@ -1,53 +1,47 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Send, MessageSquare, Users } from "lucide-react";
-
-interface Message {
-  id: string;
-  userName: string;
-  content: string;
-  timestamp: Date;
-  role: "teacher" | "student";
-}
+import { chatService, ChatMessage } from "@/services/chatService";
+import { toast } from "sonner";
 
 interface ChatSystemProps {
   roomCode: string;
   userName: string;
+  userRole?: 'teacher' | 'student';
 }
 
-export const ChatSystem = ({ roomCode, userName }: ChatSystemProps) => {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "1",
-      userName: "System",
-      content: `Welcome to room ${roomCode}! You can use this chat to communicate with other participants.`,
-      timestamp: new Date(),
-      role: "teacher"
-    }
-  ]);
+export const ChatSystem = ({ roomCode, userName, userRole = 'student' }: ChatSystemProps) => {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [onlineUsers] = useState([
-    { name: userName, role: "student", active: true }
+    { name: userName, role: userRole, active: true }
   ]);
 
-  const sendMessage = () => {
+  useEffect(() => {
+    // Subscribe to real-time messages
+    const unsubscribe = chatService.subscribeToMessages(roomCode, (newMessages) => {
+      setMessages(newMessages);
+    });
+
+    // Cleanup subscription on unmount
+    return () => unsubscribe();
+  }, [roomCode]);
+
+  const sendMessage = async () => {
     if (!newMessage.trim()) return;
 
-    const message: Message = {
-      id: Date.now().toString(),
-      userName,
-      content: newMessage,
-      timestamp: new Date(),
-      role: "student"
-    };
-
-    setMessages(prev => [...prev, message]);
-    setNewMessage("");
+    try {
+      await chatService.sendMessage(roomCode, userName, newMessage, userRole);
+      setNewMessage("");
+    } catch (error) {
+      toast.error("Failed to send message");
+      console.error("Error sending message:", error);
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -95,12 +89,10 @@ export const ChatSystem = ({ roomCode, userName }: ChatSystemProps) => {
                       className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
                         message.userName === userName
                           ? "bg-blue-500 text-white"
-                          : message.userName === "System"
-                          ? "bg-gray-100 text-gray-800"
                           : "bg-gray-200 text-gray-800"
                       }`}
                     >
-                      {message.userName !== userName && message.userName !== "System" && (
+                      {message.userName !== userName && (
                         <div className="flex items-center gap-2 mb-1">
                           <span className="text-xs font-medium">
                             {message.userName}

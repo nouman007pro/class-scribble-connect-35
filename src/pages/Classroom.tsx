@@ -1,19 +1,21 @@
 
 import { useState, useEffect } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Copy, Users, PenTool, FileText, MessageSquare } from "lucide-react";
+import { Copy, Users, PenTool, FileText, MessageSquare, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { DrawingCanvas } from "@/components/DrawingCanvas";
 import { TextBoard } from "@/components/TextBoard";
 import { ChatSystem } from "@/components/ChatSystem";
+import { chatService } from "@/services/chatService";
 
 const Classroom = () => {
   const { roomCode } = useParams();
   const [searchParams] = useSearchParams();
-  const role = searchParams.get("role");
+  const navigate = useNavigate();
+  const role = searchParams.get("role") as 'teacher' | 'student' || 'student';
   const userName = searchParams.get("name");
   
   const [activeTab, setActiveTab] = useState<"canvas" | "text" | "chat">("canvas");
@@ -30,6 +32,23 @@ const Classroom = () => {
     const link = `${window.location.origin}/classroom/${roomCode}?role=student&name=`;
     navigator.clipboard.writeText(link);
     toast("Room link copied to clipboard!");
+  };
+
+  const deleteRoom = async () => {
+    if (!roomCode) return;
+    
+    const confirmed = window.confirm("Are you sure you want to delete this room? All chat messages will be lost permanently.");
+    
+    if (confirmed) {
+      try {
+        await chatService.deleteRoomMessages(roomCode);
+        toast("Room deleted successfully!");
+        navigate("/");
+      } catch (error) {
+        toast.error("Failed to delete room");
+        console.error("Error deleting room:", error);
+      }
+    }
   };
 
   return (
@@ -53,9 +72,15 @@ const Classroom = () => {
                 Copy Code
               </Button>
               {role === "teacher" && (
-                <Button variant="outline" size="sm" onClick={shareRoomLink}>
-                  Share Link
-                </Button>
+                <>
+                  <Button variant="outline" size="sm" onClick={shareRoomLink}>
+                    Share Link
+                  </Button>
+                  <Button variant="destructive" size="sm" onClick={deleteRoom}>
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Delete Room
+                  </Button>
+                </>
               )}
               <div className="flex items-center gap-2 text-sm text-gray-600">
                 <Users className="w-4 h-4" />
@@ -137,7 +162,11 @@ const Classroom = () => {
               <CardTitle>Live Chat</CardTitle>
             </CardHeader>
             <CardContent>
-              <ChatSystem roomCode={roomCode || ""} userName={userName || ""} />
+              <ChatSystem 
+                roomCode={roomCode || ""} 
+                userName={userName || ""} 
+                userRole={role}
+              />
             </CardContent>
           </Card>
         )}
