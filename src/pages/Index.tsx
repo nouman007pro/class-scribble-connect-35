@@ -5,20 +5,57 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, PenTool, MessageSquare, FileText } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+import { chatService } from "@/services/chatService";
 
 const Index = () => {
   const [roomCode, setRoomCode] = useState("");
   const [userName, setUserName] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
-  const createRoom = () => {
-    const newRoomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-    navigate(`/classroom/${newRoomCode}?role=teacher&name=${encodeURIComponent(userName || "Teacher")}`);
+  const createRoom = async () => {
+    if (!userName.trim()) {
+      toast.error("Please enter your name");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const newRoomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+      await chatService.createRoom(newRoomCode, userName);
+      toast.success("Room created successfully!");
+      navigate(`/classroom/${newRoomCode}?role=teacher&name=${encodeURIComponent(userName)}`);
+    } catch (error) {
+      toast.error("Failed to create room");
+      console.error("Error creating room:", error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const joinRoom = () => {
-    if (roomCode && userName) {
+  const joinRoom = async () => {
+    if (!roomCode.trim() || !userName.trim()) {
+      toast.error("Please enter both your name and room code");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const roomExists = await chatService.checkRoomExists(roomCode);
+      if (!roomExists) {
+        toast.error("Room not found or no longer active. Please check the room code.");
+        setIsLoading(false);
+        return;
+      }
+
+      toast.success("Joining room...");
       navigate(`/classroom/${roomCode}?role=student&name=${encodeURIComponent(userName)}`);
+    } catch (error) {
+      toast.error("Failed to join room");
+      console.error("Error joining room:", error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -27,7 +64,7 @@ const Index = () => {
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-4">
-            Real-Time Drawing & Text Tool
+            Real-Time Classroom
           </h1>
           <p className="text-xl text-gray-600 mb-8">
             🏫 Perfect for online classes, tutoring, and collaborative learning
@@ -79,12 +116,18 @@ const Index = () => {
             </CardHeader>
             <CardContent className="space-y-4">
               <Input
-                placeholder="Your name (optional)"
+                placeholder="Your name"
                 value={userName}
                 onChange={(e) => setUserName(e.target.value)}
+                disabled={isLoading}
               />
-              <Button onClick={createRoom} className="w-full" size="lg">
-                Create Room
+              <Button 
+                onClick={createRoom} 
+                className="w-full" 
+                size="lg"
+                disabled={!userName.trim() || isLoading}
+              >
+                {isLoading ? "Creating Room..." : "Create Room"}
               </Button>
             </CardContent>
           </Card>
@@ -104,19 +147,21 @@ const Index = () => {
                 placeholder="Your name"
                 value={userName}
                 onChange={(e) => setUserName(e.target.value)}
+                disabled={isLoading}
               />
               <Input
                 placeholder="Room code"
                 value={roomCode}
                 onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
+                disabled={isLoading}
               />
               <Button
                 onClick={joinRoom}
                 className="w-full"
                 size="lg"
-                disabled={!roomCode || !userName}
+                disabled={!roomCode || !userName || isLoading}
               >
-                Join Room
+                {isLoading ? "Joining Room..." : "Join Room"}
               </Button>
             </CardContent>
           </Card>

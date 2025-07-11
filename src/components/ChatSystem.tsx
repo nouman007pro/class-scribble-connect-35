@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,29 +18,51 @@ interface ChatSystemProps {
 export const ChatSystem = ({ roomCode, userName, userRole = 'student' }: ChatSystemProps) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState("");
-  const [onlineUsers] = useState([
-    { name: userName, role: userRole, active: true }
-  ]);
+  const [isLoading, setIsLoading] = useState(false);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto scroll to bottom when new messages arrive
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
 
   useEffect(() => {
+    console.log('Setting up chat for room:', roomCode);
+    setIsLoading(true);
+    
     // Subscribe to real-time messages
     const unsubscribe = chatService.subscribeToMessages(roomCode, (newMessages) => {
+      console.log('Received messages:', newMessages);
       setMessages(newMessages);
+      setIsLoading(false);
+      
+      // Auto scroll to bottom when new messages arrive
+      setTimeout(() => {
+        scrollToBottom();
+      }, 100);
     });
 
     // Cleanup subscription on unmount
-    return () => unsubscribe();
+    return () => {
+      console.log('Cleaning up chat subscription');
+      unsubscribe();
+    };
   }, [roomCode]);
 
   const sendMessage = async () => {
-    if (!newMessage.trim()) return;
+    if (!newMessage.trim() || isLoading) return;
 
     try {
-      await chatService.sendMessage(roomCode, userName, newMessage, userRole);
+      setIsLoading(true);
+      await chatService.sendMessage(roomCode, userName, newMessage.trim(), userRole);
       setNewMessage("");
+      toast.success("Message sent!");
     } catch (error) {
       toast.error("Failed to send message");
       console.error("Error sending message:", error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -65,20 +87,28 @@ export const ChatSystem = ({ roomCode, userName, userRole = 'student' }: ChatSys
         </div>
         <div className="flex items-center gap-2 text-sm text-gray-600">
           <Users className="w-4 h-4" />
-          {onlineUsers.length} online
+          Room: {roomCode}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-        {/* Chat Messages */}
-        <Card className="lg:col-span-3">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Messages</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <ScrollArea className="h-[400px] pr-4">
-              <div className="space-y-4">
-                {messages.map((message) => (
+      {/* Chat Messages */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center justify-between">
+            <span>Messages ({messages.length})</span>
+            {isLoading && <span className="text-sm text-gray-500">Loading...</span>}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <ScrollArea className="h-[400px] w-full pr-4" ref={scrollAreaRef}>
+            <div className="space-y-4">
+              {messages.length === 0 ? (
+                <div className="text-center text-gray-500 py-8">
+                  <MessageSquare className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                  <p>No messages yet. Start the conversation!</p>
+                </div>
+              ) : (
+                messages.map((message) => (
                   <div
                     key={message.id}
                     className={`flex ${
@@ -105,60 +135,37 @@ export const ChatSystem = ({ roomCode, userName, userRole = 'student' }: ChatSys
                           </Badge>
                         </div>
                       )}
-                      <p className="text-sm">{message.content}</p>
+                      <p className="text-sm break-words">{message.content}</p>
                       <p className="text-xs opacity-70 mt-1">
                         {formatTime(message.timestamp)}
                       </p>
                     </div>
                   </div>
-                ))}
-              </div>
-            </ScrollArea>
-
-            {/* Message Input */}
-            <div className="flex gap-2">
-              <Input
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="Type your message..."
-                className="flex-1"
-              />
-              <Button onClick={sendMessage} disabled={!newMessage.trim()}>
-                <Send className="w-4 h-4" />
-              </Button>
+                ))
+              )}
+              <div ref={messagesEndRef} />
             </div>
-          </CardContent>
-        </Card>
+          </ScrollArea>
 
-        {/* Online Users */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Online Users</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {onlineUsers.map((user, index) => (
-                <div
-                  key={index}
-                  className="flex items-center gap-2 p-2 rounded-lg bg-gray-50"
-                >
-                  <div className="w-2 h-2 bg-green-500 rounded-full" />
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">{user.name}</p>
-                    <Badge
-                      variant={user.role === "teacher" ? "default" : "secondary"}
-                      className="text-xs"
-                    >
-                      {user.role}
-                    </Badge>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+          {/* Message Input */}
+          <div className="flex gap-2">
+            <Input
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder="Type your message..."
+              className="flex-1"
+              disabled={isLoading}
+            />
+            <Button 
+              onClick={sendMessage} 
+              disabled={!newMessage.trim() || isLoading}
+            >
+              <Send className="w-4 h-4" />
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Chat Guidelines */}
       <Card className="bg-yellow-50 border-yellow-200">
