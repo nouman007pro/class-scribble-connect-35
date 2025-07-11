@@ -56,7 +56,7 @@ export const chatService = {
       console.log('Checking if room exists:', roomCode);
       const roomDoc = await getDoc(doc(db, 'rooms', roomCode));
       const exists = roomDoc.exists() && roomDoc.data()?.isActive;
-      console.log('Room exists:', exists);
+      console.log('Room exists and is active:', exists);
       return exists;
     } catch (error) {
       console.error('Error checking room:', error);
@@ -67,7 +67,7 @@ export const chatService = {
   // Send a message
   async sendMessage(roomCode: string, userName: string, content: string, role: 'teacher' | 'student') {
     try {
-      console.log('Sending message:', { roomCode, userName, content, role });
+      console.log('Sending message to room:', roomCode, 'from:', userName, 'role:', role);
       
       const messageData = {
         roomCode,
@@ -88,7 +88,7 @@ export const chatService = {
 
   // Listen to messages for a room (real-time)
   subscribeToMessages(roomCode: string, callback: (messages: ChatMessage[]) => void) {
-    console.log('Setting up message subscription for room:', roomCode);
+    console.log('Setting up real-time message subscription for room:', roomCode);
     
     const q = query(
       collection(db, 'messages'),
@@ -98,32 +98,34 @@ export const chatService = {
 
     return onSnapshot(q, 
       (querySnapshot) => {
-        console.log('Received snapshot with', querySnapshot.docs.length, 'messages');
+        console.log('Firestore snapshot received with', querySnapshot.docs.length, 'messages for room:', roomCode);
         
         const messages: ChatMessage[] = [];
-        querySnapshot.forEach((doc) => {
+        querySnapshot.forEach((docSnapshot) => {
           try {
-            const data = doc.data();
+            const data = docSnapshot.data();
+            console.log('Processing message:', docSnapshot.id, data);
+            
             const message: ChatMessage = {
-              id: doc.id,
+              id: docSnapshot.id,
               roomCode: data.roomCode,
               userName: data.userName,
               content: data.content,
               timestamp: data.timestamp?.toDate() || new Date(),
-              role: data.role
+              role: data.role || 'student'
             };
             messages.push(message);
           } catch (error) {
-            console.error('Error processing message:', error, doc.data());
+            console.error('Error processing message document:', error, docSnapshot.data());
           }
         });
         
-        console.log('Processed messages:', messages);
+        console.log('Processed', messages.length, 'messages for room:', roomCode);
         callback(messages);
       },
       (error) => {
-        console.error('Error in message subscription:', error);
-        // Still call callback with empty array to stop loading
+        console.error('Error in message subscription for room:', roomCode, error);
+        // Call callback with empty array to handle error state
         callback([]);
       }
     );
@@ -146,7 +148,7 @@ export const chatService = {
       );
       
       await Promise.all(deletePromises);
-      console.log('Deleted', deletePromises.length, 'messages');
+      console.log('Deleted', deletePromises.length, 'messages for room:', roomCode);
 
       // Deactivate room
       await setDoc(doc(db, 'rooms', roomCode), {

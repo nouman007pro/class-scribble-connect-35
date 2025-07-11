@@ -22,6 +22,7 @@ export const ChatSystem = ({ roomCode, userName, userRole = 'student' }: ChatSys
   const [isSending, setIsSending] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const unsubscribeRef = useRef<(() => void) | null>(null);
 
   // Auto scroll to bottom when new messages arrive
   const scrollToBottom = () => {
@@ -31,35 +32,52 @@ export const ChatSystem = ({ roomCode, userName, userRole = 'student' }: ChatSys
   };
 
   useEffect(() => {
-    console.log('Setting up chat for room:', roomCode);
+    console.log('Setting up chat for room:', roomCode, 'user:', userName, 'role:', userRole);
+    
+    // Clear previous subscription if exists
+    if (unsubscribeRef.current) {
+      unsubscribeRef.current();
+    }
+    
+    // Reset state when room changes
+    setMessages([]);
+    setIsLoading(true);
     
     // Subscribe to real-time messages
     const unsubscribe = chatService.subscribeToMessages(roomCode, (newMessages) => {
-      console.log('Received messages:', newMessages);
-      setMessages(newMessages);
+      console.log('Received messages update:', newMessages.length, 'messages');
+      setMessages([...newMessages]); // Force re-render with new array
       setIsLoading(false);
-      scrollToBottom();
+      if (newMessages.length > 0) {
+        scrollToBottom();
+      }
     });
+
+    unsubscribeRef.current = unsubscribe;
 
     // Set a timeout to stop loading if no messages come through
     const loadingTimeout = setTimeout(() => {
+      console.log('Loading timeout reached, stopping loading state');
       setIsLoading(false);
-    }, 3000);
+    }, 5000);
 
-    // Cleanup subscription on unmount
+    // Cleanup subscription on unmount or room change
     return () => {
-      console.log('Cleaning up chat subscription');
+      console.log('Cleaning up chat subscription for room:', roomCode);
       clearTimeout(loadingTimeout);
-      unsubscribe();
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+        unsubscribeRef.current = null;
+      }
     };
-  }, [roomCode]);
+  }, [roomCode, userName, userRole]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
     if (messages.length > 0) {
       scrollToBottom();
     }
-  }, [messages]);
+  }, [messages.length]);
 
   const sendMessage = async () => {
     if (!newMessage.trim()) {
@@ -71,11 +89,11 @@ export const ChatSystem = ({ roomCode, userName, userRole = 'student' }: ChatSys
 
     try {
       setIsSending(true);
-      console.log('Sending message:', newMessage);
+      console.log('Sending message:', newMessage, 'from:', userName, 'role:', userRole);
       
       await chatService.sendMessage(roomCode, userName, newMessage.trim(), userRole);
       setNewMessage("");
-      toast.success("Message sent!");
+      console.log('Message sent successfully');
     } catch (error) {
       console.error("Error sending message:", error);
       toast.error("Failed to send message. Please try again.");
@@ -95,9 +113,12 @@ export const ChatSystem = ({ roomCode, userName, userRole = 'student' }: ChatSys
     try {
       return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     } catch (error) {
+      console.error('Error formatting time:', error);
       return "Invalid time";
     }
   };
+
+  console.log('Rendering ChatSystem with', messages.length, 'messages, loading:', isLoading);
 
   return (
     <div className="space-y-4">
@@ -123,7 +144,7 @@ export const ChatSystem = ({ roomCode, userName, userRole = 'student' }: ChatSys
         </CardHeader>
         <CardContent className="space-y-4">
           <ScrollArea className="h-[400px] w-full pr-4" ref={scrollAreaRef}>
-            <div className="space-y-4 p-2">
+            <div className="space-y-4 p-2 min-h-[380px]">
               {isLoading ? (
                 <div className="text-center text-gray-500 py-8">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
@@ -135,42 +156,44 @@ export const ChatSystem = ({ roomCode, userName, userRole = 'student' }: ChatSys
                   <p>No messages yet. Start the conversation!</p>
                 </div>
               ) : (
-                messages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`flex ${
-                      message.userName === userName ? "justify-end" : "justify-start"
-                    }`}
-                  >
+                <>
+                  {messages.map((message, index) => (
                     <div
-                      className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                        message.userName === userName
-                          ? "bg-blue-500 text-white"
-                          : "bg-gray-200 text-gray-800"
+                      key={`${message.id}-${index}`}
+                      className={`flex ${
+                        message.userName === userName ? "justify-end" : "justify-start"
                       }`}
                     >
-                      {message.userName !== userName && (
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-xs font-medium">
-                            {message.userName}
-                          </span>
-                          <Badge
-                            variant={message.role === "teacher" ? "default" : "secondary"}
-                            className="text-xs"
-                          >
-                            {message.role}
-                          </Badge>
-                        </div>
-                      )}
-                      <p className="text-sm break-words">{message.content}</p>
-                      <p className="text-xs opacity-70 mt-1">
-                        {formatTime(message.timestamp)}
-                      </p>
+                      <div
+                        className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                          message.userName === userName
+                            ? "bg-blue-500 text-white"
+                            : "bg-gray-200 text-gray-800"
+                        }`}
+                      >
+                        {message.userName !== userName && (
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-xs font-medium">
+                              {message.userName}
+                            </span>
+                            <Badge
+                              variant={message.role === "teacher" ? "default" : "secondary"}
+                              className="text-xs"
+                            >
+                              {message.role}
+                            </Badge>
+                          </div>
+                        )}
+                        <p className="text-sm break-words">{message.content}</p>
+                        <p className="text-xs opacity-70 mt-1">
+                          {formatTime(message.timestamp)}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                ))
+                  ))}
+                  <div ref={messagesEndRef} />
+                </>
               )}
-              <div ref={messagesEndRef} />
             </div>
           </ScrollArea>
 
