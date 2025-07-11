@@ -18,51 +18,69 @@ interface ChatSystemProps {
 export const ChatSystem = ({ roomCode, userName, userRole = 'student' }: ChatSystemProps) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSending, setIsSending] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Auto scroll to bottom when new messages arrive
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, 100);
   };
 
   useEffect(() => {
     console.log('Setting up chat for room:', roomCode);
-    setIsLoading(true);
     
     // Subscribe to real-time messages
     const unsubscribe = chatService.subscribeToMessages(roomCode, (newMessages) => {
       console.log('Received messages:', newMessages);
       setMessages(newMessages);
       setIsLoading(false);
-      
-      // Auto scroll to bottom when new messages arrive
-      setTimeout(() => {
-        scrollToBottom();
-      }, 100);
+      scrollToBottom();
     });
+
+    // Set a timeout to stop loading if no messages come through
+    const loadingTimeout = setTimeout(() => {
+      setIsLoading(false);
+    }, 3000);
 
     // Cleanup subscription on unmount
     return () => {
       console.log('Cleaning up chat subscription');
+      clearTimeout(loadingTimeout);
       unsubscribe();
     };
   }, [roomCode]);
 
+  // Scroll to bottom when messages change
+  useEffect(() => {
+    if (messages.length > 0) {
+      scrollToBottom();
+    }
+  }, [messages]);
+
   const sendMessage = async () => {
-    if (!newMessage.trim() || isLoading) return;
+    if (!newMessage.trim()) {
+      toast.error("Please enter a message");
+      return;
+    }
+
+    if (isSending) return;
 
     try {
-      setIsLoading(true);
+      setIsSending(true);
+      console.log('Sending message:', newMessage);
+      
       await chatService.sendMessage(roomCode, userName, newMessage.trim(), userRole);
       setNewMessage("");
       toast.success("Message sent!");
     } catch (error) {
-      toast.error("Failed to send message");
       console.error("Error sending message:", error);
+      toast.error("Failed to send message. Please try again.");
     } finally {
-      setIsLoading(false);
+      setIsSending(false);
     }
   };
 
@@ -74,7 +92,11 @@ export const ChatSystem = ({ roomCode, userName, userRole = 'student' }: ChatSys
   };
 
   const formatTime = (date: Date) => {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    try {
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch (error) {
+      return "Invalid time";
+    }
   };
 
   return (
@@ -96,13 +118,18 @@ export const ChatSystem = ({ roomCode, userName, userRole = 'student' }: ChatSys
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center justify-between">
             <span>Messages ({messages.length})</span>
-            {isLoading && <span className="text-sm text-gray-500">Loading...</span>}
+            {isLoading && <span className="text-sm text-gray-500">Loading messages...</span>}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <ScrollArea className="h-[400px] w-full pr-4" ref={scrollAreaRef}>
-            <div className="space-y-4">
-              {messages.length === 0 ? (
+            <div className="space-y-4 p-2">
+              {isLoading ? (
+                <div className="text-center text-gray-500 py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
+                  <p>Loading messages...</p>
+                </div>
+              ) : messages.length === 0 ? (
                 <div className="text-center text-gray-500 py-8">
                   <MessageSquare className="w-12 h-12 mx-auto mb-2 opacity-50" />
                   <p>No messages yet. Start the conversation!</p>
@@ -155,13 +182,17 @@ export const ChatSystem = ({ roomCode, userName, userRole = 'student' }: ChatSys
               onKeyPress={handleKeyPress}
               placeholder="Type your message..."
               className="flex-1"
-              disabled={isLoading}
+              disabled={isSending}
             />
             <Button 
               onClick={sendMessage} 
-              disabled={!newMessage.trim() || isLoading}
+              disabled={!newMessage.trim() || isSending}
             >
-              <Send className="w-4 h-4" />
+              {isSending ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+              ) : (
+                <Send className="w-4 h-4" />
+              )}
             </Button>
           </div>
         </CardContent>
