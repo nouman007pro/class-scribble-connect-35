@@ -1,17 +1,17 @@
-
-import { 
-  collection, 
-  addDoc, 
-  query, 
-  where, 
-  orderBy, 
-  onSnapshot, 
-  deleteDoc, 
+// chatService.ts
+import {
+  collection,
+  addDoc,
+  query,
+  where,
+  orderBy,
+  onSnapshot,
+  deleteDoc,
   getDocs,
   doc,
   Timestamp,
   setDoc,
-  getDoc 
+  getDoc,
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 
@@ -32,14 +32,13 @@ export interface Room {
 }
 
 export const chatService = {
-  // Create a room
   async createRoom(roomCode: string, teacherName: string) {
     try {
       await setDoc(doc(db, 'rooms', roomCode), {
         roomCode,
         createdBy: teacherName,
         createdAt: Timestamp.now(),
-        isActive: true
+        isActive: true,
       });
       return true;
     } catch (error) {
@@ -48,7 +47,6 @@ export const chatService = {
     }
   },
 
-  // Check if room exists
   async checkRoomExists(roomCode: string) {
     try {
       const roomDoc = await getDoc(doc(db, 'rooms', roomCode));
@@ -59,7 +57,6 @@ export const chatService = {
     }
   },
 
-  // Send a message
   async sendMessage(roomCode: string, userName: string, content: string, role: 'teacher' | 'student') {
     try {
       const messageData = {
@@ -67,9 +64,8 @@ export const chatService = {
         userName,
         content,
         timestamp: Timestamp.now(),
-        role
+        role,
       };
-
       await addDoc(collection(db, 'messages'), messageData);
     } catch (error) {
       console.error('Error sending message:', error);
@@ -77,7 +73,6 @@ export const chatService = {
     }
   },
 
-  // Listen to messages for a room (real-time)
   subscribeToMessages(roomCode: string, callback: (messages: ChatMessage[]) => void) {
     const q = query(
       collection(db, 'messages'),
@@ -85,7 +80,8 @@ export const chatService = {
       orderBy('timestamp', 'asc')
     );
 
-    return onSnapshot(q, 
+    return onSnapshot(
+      q,
       (querySnapshot) => {
         const messages: ChatMessage[] = [];
         querySnapshot.forEach((docSnapshot) => {
@@ -95,44 +91,32 @@ export const chatService = {
             roomCode: data.roomCode,
             userName: data.userName,
             content: data.content,
-            timestamp: data.timestamp?.toDate() || new Date(),
-            role: data.role || 'student'
+            timestamp: data.timestamp?.toDate?.() || new Date(),
+            role: data.role || 'student',
           };
           messages.push(message);
         });
-        
         callback(messages);
       },
       (error) => {
         console.error('Error in message subscription:', error);
-        callback([]);
+        // Do not clear messages, just log error
       }
     );
   },
 
-  // Delete all messages for a room and deactivate room
   async deleteRoom(roomCode: string) {
     try {
-      // Delete all messages
-      const q = query(
-        collection(db, 'messages'),
-        where('roomCode', '==', roomCode)
-      );
-      
+      const q = query(collection(db, 'messages'), where('roomCode', '==', roomCode));
       const querySnapshot = await getDocs(q);
-      const deletePromises = querySnapshot.docs.map(docSnapshot => 
+      const deletePromises = querySnapshot.docs.map((docSnapshot) =>
         deleteDoc(doc(db, 'messages', docSnapshot.id))
       );
-      
       await Promise.all(deletePromises);
-
-      // Deactivate room
-      await setDoc(doc(db, 'rooms', roomCode), {
-        isActive: false
-      }, { merge: true });
+      await setDoc(doc(db, 'rooms', roomCode), { isActive: false }, { merge: true });
     } catch (error) {
       console.error('Error deleting room:', error);
       throw error;
     }
-  }
+  },
 };
