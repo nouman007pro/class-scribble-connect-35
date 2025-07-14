@@ -99,11 +99,12 @@ export const ChatSystem = ({ roomCode, userName, userRole = 'student' }: ChatSys
       {/* Chat Messages */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Messages</CardTitle>
+          <CardTitle className="text-base">Messages ({messages.length})</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <ScrollArea className="h-[400px] w-full pr-4">
-            <div className="space-y-4 p-2">
+        <CardContent>
+          {/* Messages Container - Always Visible */}
+          <div className="h-[400px] overflow-y-auto border rounded-lg p-4 mb-4 bg-gray-50">
+            <div className="space-y-3">
               {messages.length === 0 ? (
                 <div className="text-center text-gray-500 py-8">
                   <MessageSquare className="w-12 h-12 mx-auto mb-2 opacity-50" />
@@ -113,20 +114,20 @@ export const ChatSystem = ({ roomCode, userName, userRole = 'student' }: ChatSys
                 messages.map((message, index) => (
                   <div
                     key={`${message.id}-${index}`}
-                    className={`flex ${
+                    className={`flex mb-3 ${
                       message.userName === userName ? "justify-end" : "justify-start"
                     }`}
                   >
                     <div
-                      className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                      className={`max-w-xs lg:max-w-md px-4 py-3 rounded-lg shadow-sm ${
                         message.userName === userName
                           ? "bg-blue-500 text-white"
-                          : "bg-gray-200 text-gray-800"
+                          : "bg-white border border-gray-200 text-gray-800"
                       }`}
                     >
                       {message.userName !== userName && (
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-xs font-medium">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-xs font-medium text-gray-600">
                             {message.userName}
                           </span>
                           <Badge
@@ -138,7 +139,9 @@ export const ChatSystem = ({ roomCode, userName, userRole = 'student' }: ChatSys
                         </div>
                       )}
                       <p className="text-sm break-words">{message.content}</p>
-                      <p className="text-xs opacity-70 mt-1">
+                      <p className={`text-xs mt-2 ${
+                        message.userName === userName ? "text-blue-100" : "text-gray-500"
+                      }`}>
                         {formatTime(message.timestamp)}
                       </p>
                     </div>
@@ -147,7 +150,7 @@ export const ChatSystem = ({ roomCode, userName, userRole = 'student' }: ChatSys
               )}
               <div ref={messagesEndRef} />
             </div>
-          </ScrollArea>
+          </div>
 
           {/* Message Input */}
           <div className="flex gap-2">
