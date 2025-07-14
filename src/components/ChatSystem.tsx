@@ -1,10 +1,8 @@
-
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useLayoutEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Send, MessageSquare, Users } from "lucide-react";
 import { chatService, ChatMessage } from "@/services/chatService";
 import { toast } from "sonner";
@@ -12,34 +10,38 @@ import { toast } from "sonner";
 interface ChatSystemProps {
   roomCode: string;
   userName: string;
-  userRole?: 'teacher' | 'student';
+  userRole?: "teacher" | "student";
 }
 
-export const ChatSystem = ({ roomCode, userName, userRole = 'student' }: ChatSystemProps) => {
+export const ChatSystem = ({ roomCode, userName, userRole = "student" }: ChatSystemProps) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const unsubscribeRef = useRef<(() => void) | null>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const unsubscribeRef = useRef<() => void | null>(null);
 
-  // Auto scroll to bottom
+  // Scroll to bottom (safely)
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    }, 50); // short delay ensures messages rendered
   };
 
+  useLayoutEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
   useEffect(() => {
-    console.log('Setting up chat for room:', roomCode, 'user:', userName, 'role:', userRole);
-    
-    // Clear previous subscription
+    console.log("Subscribing to chat for room:", roomCode);
+
     if (unsubscribeRef.current) {
       unsubscribeRef.current();
     }
-    
-    // Subscribe to real-time messages
+
     const unsubscribe = chatService.subscribeToMessages(roomCode, (newMessages) => {
-      console.log('Received messages:', newMessages.length);
+      console.log("New messages received:", newMessages);
       setMessages(newMessages);
-      setTimeout(scrollToBottom, 100);
     });
 
     unsubscribeRef.current = unsubscribe;
@@ -49,23 +51,17 @@ export const ChatSystem = ({ roomCode, userName, userRole = 'student' }: ChatSys
         unsubscribeRef.current();
       }
     };
-  }, [roomCode, userName, userRole]);
-
-  // Scroll when messages change
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+  }, [roomCode]);
 
   const sendMessage = async () => {
     if (!newMessage.trim() || isSending) return;
-
     try {
       setIsSending(true);
       await chatService.sendMessage(roomCode, userName, newMessage.trim(), userRole);
       setNewMessage("");
     } catch (error) {
-      console.error("Error sending message:", error);
-      toast.error("Failed to send message");
+      console.error("Failed to send:", error);
+      toast.error("Message failed to send");
     } finally {
       setIsSending(false);
     }
@@ -79,7 +75,7 @@ export const ChatSystem = ({ roomCode, userName, userRole = 'student' }: ChatSys
   };
 
   const formatTime = (date: Date) => {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   };
 
   return (
@@ -102,8 +98,10 @@ export const ChatSystem = ({ roomCode, userName, userRole = 'student' }: ChatSys
           <CardTitle className="text-base">Messages ({messages.length})</CardTitle>
         </CardHeader>
         <CardContent>
-          {/* Messages Container - Always Visible */}
-          <div className="h-[400px] overflow-y-auto border rounded-lg p-4 mb-4 bg-gray-50">
+          <div
+            ref={messagesContainerRef}
+            className="h-[400px] overflow-y-auto border rounded-lg p-4 mb-4 bg-gray-50"
+          >
             <div className="space-y-3">
               {messages.length === 0 ? (
                 <div className="text-center text-gray-500 py-8">
@@ -114,7 +112,7 @@ export const ChatSystem = ({ roomCode, userName, userRole = 'student' }: ChatSys
                 messages.map((message, index) => (
                   <div
                     key={`${message.id}-${index}`}
-                    className={`flex mb-3 ${
+                    className={`flex ${
                       message.userName === userName ? "justify-end" : "justify-start"
                     }`}
                   >
@@ -139,9 +137,11 @@ export const ChatSystem = ({ roomCode, userName, userRole = 'student' }: ChatSys
                         </div>
                       )}
                       <p className="text-sm break-words">{message.content}</p>
-                      <p className={`text-xs mt-2 ${
-                        message.userName === userName ? "text-blue-100" : "text-gray-500"
-                      }`}>
+                      <p
+                        className={`text-xs mt-2 ${
+                          message.userName === userName ? "text-blue-100" : "text-gray-500"
+                        }`}
+                      >
                         {formatTime(message.timestamp)}
                       </p>
                     </div>
@@ -157,15 +157,12 @@ export const ChatSystem = ({ roomCode, userName, userRole = 'student' }: ChatSys
             <Input
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
-              onKeyPress={handleKeyPress}
+              onKeyDown={handleKeyPress}
               placeholder="Type your message..."
               className="flex-1"
               disabled={isSending}
             />
-            <Button 
-              onClick={sendMessage} 
-              disabled={!newMessage.trim() || isSending}
-            >
+            <Button onClick={sendMessage} disabled={!newMessage.trim() || isSending}>
               {isSending ? (
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
               ) : (
