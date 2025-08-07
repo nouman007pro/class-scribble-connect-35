@@ -3,15 +3,20 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, PenTool, MessageSquare, FileText } from "lucide-react";
+import { Users, PenTool, MessageSquare, FileText, Send } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { chatService } from "@/services/chatService";
+import { collection, addDoc, Timestamp } from "firebase/firestore";
+import { db } from "@/config/firebase";
 
 const Index = () => {
   const [roomCode, setRoomCode] = useState("");
   const [userName, setUserName] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [userId, setUserId] = useState("");
+  const [message, setMessage] = useState("");
+  const [isSending, setIsSending] = useState(false);
   const navigate = useNavigate();
 
   const createRoom = async () => {
@@ -56,6 +61,30 @@ const Index = () => {
       console.error("Error joining room:", error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const sendMessage = async () => {
+    if (!userId.trim() || !message.trim()) {
+      toast.error("Please enter both User ID and message");
+      return;
+    }
+
+    setIsSending(true);
+    try {
+      const docRef = await addDoc(collection(db, "messages"), {
+        userId: userId,
+        message: message,
+        timestamp: Timestamp.now()
+      });
+      toast.success(`Message sent! ID: ${docRef.id}`);
+      setMessage("");
+      setUserId("");
+    } catch (error) {
+      console.error("Error sending message: ", error);
+      toast.error("Failed to send message");
+    } finally {
+      setIsSending(false);
     }
   };
 
@@ -162,6 +191,43 @@ const Index = () => {
                 disabled={!roomCode || !userName || isLoading}
               >
                 {isLoading ? "Joining Room..." : "Join Room"}
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+        
+        {/* Firebase Message Testing Section */}
+        <div className="mt-8">
+          <Card className="bg-white shadow-lg">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Send className="w-5 h-5" />
+                Firebase Message Test
+              </CardTitle>
+              <CardDescription>
+                Test Firebase message storage functionality
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Input
+                placeholder="Your ID"
+                value={userId}
+                onChange={(e) => setUserId(e.target.value)}
+                disabled={isSending}
+              />
+              <Input
+                placeholder="Your message"
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                disabled={isSending}
+              />
+              <Button
+                onClick={sendMessage}
+                className="w-full"
+                size="lg"
+                disabled={!userId.trim() || !message.trim() || isSending}
+              >
+                {isSending ? "Sending..." : "Send Message"}
               </Button>
             </CardContent>
           </Card>
