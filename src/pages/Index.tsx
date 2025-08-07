@@ -72,17 +72,24 @@ const Index = () => {
 
     setIsSending(true);
     try {
+      console.log("Attempting to send message to Firebase...");
+      console.log("Database instance:", db);
+      
       const docRef = await addDoc(collection(db, "messages"), {
         userId: userId,
         message: message,
-        timestamp: Timestamp.now()
+        timestamp: Timestamp.now(),
+        created: new Date().toISOString()
       });
-      toast.success(`Message sent! ID: ${docRef.id}`);
+      
+      console.log("Document written with ID: ", docRef.id);
+      toast.success(`Message sent! Document ID: ${docRef.id}`);
       setMessage("");
       setUserId("");
     } catch (error) {
       console.error("Error sending message: ", error);
-      toast.error("Failed to send message");
+      console.error("Error details:", error.message);
+      toast.error(`Failed to send message: ${error.message}`);
     } finally {
       setIsSending(false);
     }
