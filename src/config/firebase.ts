@@ -4,13 +4,13 @@ import { getFirestore } from 'firebase/firestore';
 import { getAnalytics } from 'firebase/analytics';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAQUNAglBEa0dkHwgDV5_rFX9Ce1Mp1fjc",
-  authDomain: "classroom-233dd.firebaseapp.com",
-  projectId: "classroom-233dd",
-  storageBucket: "classroom-233dd.firebasestorage.app",
-  messagingSenderId: "396322462778",
-  appId: "1:396322462778:web:38b13d9aeaa3304f746903",
-  measurementId: "G-X9T3BR1TCF"
+  apiKey: "AIzaSyDyNRuDWqItCXxFf_xwFA7IgDSKHFZJXpI",
+  authDomain: "final-project-zeynab.firebaseapp.com",
+  projectId: "final-project-zeynab",
+  storageBucket: "final-project-zeynab.firebasestorage.app",
+  messagingSenderId: "706920717710",
+  appId: "1:706920717710:web:abfda4d7eee3a9c2ec18df",
+  measurementId: "G-G9HGBYPEGT"
 };
 
 // Initialize Firebase
